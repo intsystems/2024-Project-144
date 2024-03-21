@@ -6,12 +6,12 @@ class PopularityRecommender:
         self.items_df = items_df
 
     def _calc_popularity_df(self, ratings_train):
-        return ratings_train.groupby('movie_id')['rating'].sum().sort_values(
+        return ratings_train.groupby('item_id')['rating'].sum().sort_values(
             ascending=False).reset_index()
 
     def recommend_items(self, user_id, items_to_ignore=[], topn=10, verbose=False):
         # Recommend the more popular items that the user hasn't seen yet.
-        recommendations_df = self.popularity_df[~self.popularity_df['movie_id'].isin(items_to_ignore)] \
+        recommendations_df = self.popularity_df[~self.popularity_df['item_id'].isin(items_to_ignore)] \
             .sort_values('rating', ascending=False) \
             .head(topn)
 

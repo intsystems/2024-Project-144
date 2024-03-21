@@ -16,7 +16,7 @@ class CFRecommender:
     def _calc_cf_predictions(self, ratings_train):
 
         users_items_pivot_matrix_df = ratings_train.pivot(index='user_id',
-                                                          columns='movie_id',
+                                                          columns='item_id',
                                                           values='rating').fillna(0)
         users_items_pivot_matrix = users_items_pivot_matrix_df.values
         users_items_pivot_sparse_matrix = csr_matrix(users_items_pivot_matrix)
@@ -44,7 +44,7 @@ class CFRecommender:
                 .reset_index().rename(columns={user_id: 'rating'})
 
             # Recommend the highest predicted rating movies that the user hasn't seen yet.
-            recommendations_df = sorted_user_predictions[~sorted_user_predictions['movie_id'].isin(items_to_ignore)] \
+            recommendations_df = sorted_user_predictions[~sorted_user_predictions['item_id'].isin(items_to_ignore)] \
                 .sort_values('rating', ascending=False) \
                 .head(topn)
 
@@ -53,7 +53,7 @@ class CFRecommender:
         #         raise Exception('"items_df" is required in verbose mode')
         #
         #     recommendations_df = recommendations_df.merge(self.items_df, how = 'left',
-        #                                                   left_on = 'movie_id',
+        #                                                   left_on = 'item_id',
         #                                                   right_on = 'contentId')[['recStrength', 'contentId', 'title', 'url', 'lang']]
 
         else:
