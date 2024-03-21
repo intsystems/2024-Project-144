@@ -27,7 +27,7 @@ class CMFRecommender:
         return self.user_info
 
     def recommend_items_new(self, user_id, I, topn):
-        recommended_items = self.model.topN_new(user=user_id, n=topn, output_score=True)[:2]
+        recommended_items = self.model.topN_new(user=user_id, I=I, n=topn, output_score=True)[:2]
         return pd.DataFrame({"ItemId": recommended_items[0], "Rating": recommended_items[1]})
 
     def recommend_items_cold(self, user_row, topn=10):
