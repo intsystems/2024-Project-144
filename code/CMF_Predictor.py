@@ -10,6 +10,9 @@ class CMFRecommender:
         self.trained = False
         self.capacity = capacity
 
+    def get_users(self):
+        return self.user_info
+
     def fit(self, ratings, user_info, item_info):
         self.trained = True
         self.ratings = pd.DataFrame(ratings, columns=['UserId', 'ItemId', 'Rating'])
