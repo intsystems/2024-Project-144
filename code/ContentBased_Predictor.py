@@ -1,17 +1,13 @@
 import numpy as np
 import pandas as pd
-# from cmfrec import CMF_implicit
-from cmfrec import CMF
+from cmfrec import ContentBased
 
-class CMFRecommender:
+class ContentBasedRecommender:
     def __init__(self, capacity=500, num_of_factors=40):
-        self.model = CMF(k=num_of_factors)
+        self.model = ContentBased(k=num_of_factors)
         self.ratings = None
         self.trained = False
         self.capacity = capacity
-
-    def get_users(self):
-        return self.user_info
 
     def fit(self, ratings, user_info, item_info):
         self.trained = True
@@ -29,17 +25,10 @@ class CMFRecommender:
     def get_known_users_info(self):
         return self.user_info
 
-    def recommend_items_new(self, user_id, I, topn):
-        recommended_items = self.model.topN_new(user=user_id, I=I, n=topn, output_score=True)
+    def recommend_items_new(self, U, I, topn):
+        recommended_items = self.model.topN_new(n=topn, U=U, I=I ,output_score=True)
         return pd.DataFrame({"ItemId": recommended_items[0], "Rating": recommended_items[1]})
 
-    def recommend_items_cold(self, user_row, topn=10):
-        n = min(topn, self.get_unqiue_item_count())
-        recommended_items = self.model.topN_cold(U=user_row, n=n, output_score=True)
-        return pd.DataFrame({"ItemId": recommended_items[0], "Rating": recommended_items[1]})
-
-    def get_max_index(self):
-        return self.ratings["UserId"].max(), self.ratings["ItemId"].max()
 
     def recommend_items(self, user_id, items_to_recommend, topn=10, exclude_rated=True):
         items_to_ignore = []
@@ -52,6 +41,8 @@ class CMFRecommender:
 
         return pd.DataFrame({"ItemId": recommended_items[0], "Rating": recommended_items[1]})
 
+    def get_max_index(self):
+        return self.ratings["UserId"].max(), self.ratings["ItemId"].max()
 
     def retrain(self, new_ratings, new_users, new_items):
         number_of_new_ratings = len(new_ratings)
