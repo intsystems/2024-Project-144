@@ -5,7 +5,7 @@ import scipy.stats as sps
 from torch.utils.data import DataLoader
 import numpy as np
 
-from helper import DistributionHandler, print_distributions
+from helper import DistributionHandler, print_distributions, construct_probability_density, print_3D
 
 
 class FeedbackDataset:
@@ -131,41 +131,51 @@ def rosenblatt_test(x, y, alpha=0.05):
     return (z - expected_z) / np.sqrt(variance_z * 45) + 1 / 6, rosenblatt_quantiles[1 - alpha]
 
 
-def dynamic_system_iterate_u(model, usefulness, z, customer_distribution, w_distribution, c_size=8, w_size=8,
-                             topn=8,
-                             delta=1e-4, visualize_distributions=None):
+def dynamic_system_iterate_u(model, usefulness, z, c_w_distribution, u_pred_case=1, c_size=8, w_size=8,
+                             topn=8, visualize_distributions=None):
+    current_sample = c_w_distribution.rvs(size=max(c_size, w_size))
     user_info = pd.DataFrame(
-        {"F": customer_distribution.rvs(size=c_size)})  # size = (c_size, c_feature_size) в многомерном случае
+        {"F": current_sample[0][:c_size]})  # size = (c_size, c_feature_size) в многомерном случае
     user_info["UserId"] = np.arange(c_size)
 
     item_info = pd.DataFrame(
-        {"F": w_distribution.rvs(size=w_size)})  # size = (w_size, w_feature_size) в многомерном случае
+        {"F": current_sample[1][:w_size]})  # size = (w_size, w_feature_size) в многомерном случае
     item_info["ItemId"] = np.arange(w_size)
 
     if visualize_distributions is not None:
-        print_distributions(visualize_distributions[0], visualize_distributions[1], user_info, item_info)
+        print_distributions(visualize_distributions[0], visualize_distributions[1], user_info, item_info,
+                            current_sample)
 
     predicted_feedback_1 = []
     predicted_feedback_2 = []
     real_feedback = []
 
     diff_feedback = []
-
+    L_values = []
+    points = []
     for index, user_row in user_info.iterrows():
         w_offered = model.recommend_topN(user_row, item_info, topn=topn)
         cur_diff_feadback = []
         predicted_cur_match_1 = []
         predicted_cur_match_2 = []
         for _, w in w_offered.iterrows():
-            feature = item_info.loc[item_info.ItemId == w.ItemId]["F"]
+            feature = item_info.loc[item_info.ItemId == w.ItemId]["F"].item()
+            points.append((user_row["F"], feature))
+
             u_true = usefulness(user_row["F"], feature, z)
             real_deal = sps.bernoulli.rvs(u_true)  # моделируем сделки
+
             real_feedback.append((user_row["UserId"], w["ItemId"], real_deal))
 
-            predicted_deal_1 = 1 if w["Rating"] >= 0.5 else 0
-            predicted_deal_2 = sps.bernoulli.rvs(w["Rating"])
+            predicted_deal_1 = sps.bernoulli.rvs(w["Rating"])
+            predicted_deal_2 = 1 if w["Rating"] >= 0.5 else 0
             predicted_cur_match_1.append(1 if predicted_deal_1 == real_deal else 0)
             predicted_cur_match_2.append(1 if predicted_deal_2 == real_deal else 0)
+
+            if u_pred_case == 1:
+                L_values.append((u_true - w["Rating"]) ** 2)
+            else:
+                L_values.append((u_true - predicted_deal_1) ** 2)
             cur_diff_feadback.append(w["Rating"] - u_true)
         diff_feedback.append(np.array(cur_diff_feadback).mean())
         predicted_feedback_1.append(np.array(predicted_cur_match_1).mean())
@@ -177,24 +187,29 @@ def dynamic_system_iterate_u(model, usefulness, z, customer_distribution, w_dist
     train_dataset = FeedbackDataset(new_feedback_df, user_info, item_info)
     train_data_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
-    loss, accuracy = model.eval_epoch(train_data_loader)
     model.fit_epoch(train_data_loader)
 
-    grouped_users = new_feedback_df.groupby('UserId')['Feedback'].mean().reset_index()
-    grouped_users['Feedback'] += 1 / topn
+    c_w_distribution = DistributionHandler(construct_probability_density(points, np.array(L_values)))
 
-    user_info = user_info.merge(grouped_users, how="inner", on='UserId')
-    customer_distribution = DistributionHandler(
-        sps.gaussian_kde(user_info["F"], bw_method=.1, weights=user_info['Feedback']))
-
-    grouped_items = new_feedback_df.groupby('ItemId')['Feedback'].mean().reset_index()
-
-    item_info = item_info.merge(grouped_items, how="left", on='ItemId').fillna(0)
-    item_info['Feedback'] += delta
-
-    w_distribution = DistributionHandler(
-        sps.gaussian_kde(item_info["F"], bw_method=.1, weights=item_info['Feedback']))
-    # sps.gaussian_kde(item_info["F"], weights=item_info['Feedback']))
-    return customer_distribution, w_distribution, (
+    return c_w_distribution, (
         np.array(predicted_feedback_1).mean(), np.array(predicted_feedback_2).mean()), sps.gaussian_kde(
         diff_feedback).pdf(0)
+
+
+def init_data(customer_distribution, w_distribution, start_c_size, start_w_size, usefulness, z):
+    user_info = pd.DataFrame(
+        {"F": customer_distribution.rvs(size=start_c_size)})  # генерим датасет для нулевой итерации
+    user_info["UserId"] = np.arange(start_c_size)
+
+    item_info = pd.DataFrame({"F": w_distribution.rvs(size=start_w_size)})
+    item_info["ItemId"] = np.arange(start_w_size)
+    feedback = []
+
+    for i, user_row in user_info.iterrows():
+        for j, item_row in item_info.iterrows():
+            deal = sps.bernoulli.rvs(usefulness(user_row["F"], item_row["F"], z))
+            feedback.append((user_row["UserId"], item_row["ItemId"], deal))
+    feedback = pd.DataFrame(feedback, columns=['UserId', 'ItemId', 'Feedback'])
+    batch_size = 512
+    train_dataset = FeedbackDataset(feedback, user_info, item_info)
+    return DataLoader(train_dataset, batch_size=batch_size, shuffle=True), DistributionHandler((customer_distribution, w_distribution))

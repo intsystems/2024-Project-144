@@ -1,8 +1,11 @@
+import pandas as pd
 import scipy.stats as sps
 import seaborn as sns
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
+from collections.abc import Iterable
+
 
 class DistributionHandler:
     def __init__(self, distribution):
@@ -11,15 +14,22 @@ class DistributionHandler:
     def rvs(self, size=1):
         if issubclass(type(self.distribution), sps.rv_continuous):
             return self.distribution.rvs(size)
+        elif isinstance(self.distribution, Iterable):
+            values = []
+            for value in self.distribution:
+                values.append(value.rvs(size))
+            return np.array(values)
         else:
-            return self.distribution.resample(size)[0]
+            return self.distribution.resample(size)
 
 
-def print_distributions(num_of_iteration, axs, user_info, item_info):
-    sns.kdeplot(user_info["F"], ax=axs[0], label=f"Itration number = {num_of_iteration}")
+def print_distributions(num_of_iteration, axs, user_info, item_info, c_w_sample):
+    sns.kdeplot(user_info["F"], ax=axs[0], label=f"Iteration number = {num_of_iteration}")
     axs[0].set_title("User Distribution")
     sns.kdeplot(data=item_info["F"], ax=axs[1])
     axs[1].set_title("Item Distribution")
+    plt.figure()
+    sns.kdeplot(data=pd.DataFrame({"CustomerF": c_w_sample[0], "ItemF": c_w_sample[1]}), x="CustomerF", y="ItemF", cmap=cm.viridis)
 
 
 def inverse_function(L):
@@ -36,7 +46,7 @@ def construct_probability_density(points, L_values):
 
     # Create a Gaussian KDE object
     pts = np.vstack([point for point in points]).T
-    kde = sps.gaussian_kde(pts, weights=normalized_values)
+    kde = sps.gaussian_kde(pts, bw_method=0.1, weights=normalized_values)
     return kde
 
 def print_3D(p):
