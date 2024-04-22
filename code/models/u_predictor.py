@@ -5,7 +5,7 @@ import scipy.stats as sps
 from torch.utils.data import DataLoader
 import numpy as np
 
-from helper import DistributionHandler, print_distributions, construct_probability_density, print_3D
+from helper import DistributionHandler, print_distributions, construct_probability_density, LValuesHandler
 
 
 class FeedbackDataset:
@@ -131,7 +131,7 @@ def rosenblatt_test(x, y, alpha=0.05):
     return (z - expected_z) / np.sqrt(variance_z * 45) + 1 / 6, rosenblatt_quantiles[1 - alpha]
 
 
-def dynamic_system_iterate_u(model, usefulness, z, c_w_distribution, u_pred_case=1, c_size=8, w_size=8,
+def dynamic_system_iterate_u(model, usefulness, z, c_w_distribution, L_handler, u_pred_case=1, c_size=8, w_size=8,
                              topn=8, visualize_distributions=None):
     current_sample = c_w_distribution.rvs(size=max(c_size, w_size))
     user_info = pd.DataFrame(
@@ -141,7 +141,9 @@ def dynamic_system_iterate_u(model, usefulness, z, c_w_distribution, u_pred_case
     item_info = pd.DataFrame(
         {"F": current_sample[1][:w_size]})  # size = (w_size, w_feature_size) в многомерном случае
     item_info["ItemId"] = np.arange(w_size)
-
+    #
+    # print(item_info)
+    # print(user_info)
     if visualize_distributions is not None:
         print_distributions(visualize_distributions[0], visualize_distributions[1], user_info, item_info,
                             current_sample)
@@ -162,7 +164,7 @@ def dynamic_system_iterate_u(model, usefulness, z, c_w_distribution, u_pred_case
             feature = item_info.loc[item_info.ItemId == w.ItemId]["F"].item()
             points.append((user_row["F"], feature))
 
-            u_true = usefulness(user_row["F"], feature, z)
+            u_true = usefulness(user_row["F"], feature, z())
             real_deal = sps.bernoulli.rvs(u_true)  # моделируем сделки
 
             real_feedback.append((user_row["UserId"], w["ItemId"], real_deal))
@@ -175,7 +177,7 @@ def dynamic_system_iterate_u(model, usefulness, z, c_w_distribution, u_pred_case
             if u_pred_case == 1:
                 L_values.append((u_true - w["Rating"]) ** 2)
             else:
-                L_values.append((u_true - predicted_deal_1) ** 2)
+                L_values.append((u_true - predicted_deal_2) ** 2)
             cur_diff_feadback.append(w["Rating"] - u_true)
         diff_feedback.append(np.array(cur_diff_feadback).mean())
         predicted_feedback_1.append(np.array(predicted_cur_match_1).mean())
@@ -189,6 +191,10 @@ def dynamic_system_iterate_u(model, usefulness, z, c_w_distribution, u_pred_case
 
     model.fit_epoch(train_data_loader)
 
+
+    # print("\n-----------------------------------------", list(zip(points, L_values)))
+
+    points, L_values = L_handler.append(points, np.array(L_values))
     c_w_distribution = DistributionHandler(construct_probability_density(points, np.array(L_values)))
 
     return c_w_distribution, (
@@ -207,7 +213,7 @@ def init_data(customer_distribution, w_distribution, start_c_size, start_w_size,
 
     for i, user_row in user_info.iterrows():
         for j, item_row in item_info.iterrows():
-            deal = sps.bernoulli.rvs(usefulness(user_row["F"], item_row["F"], z))
+            deal = sps.bernoulli.rvs(usefulness(user_row["F"], item_row["F"], z()))
             feedback.append((user_row["UserId"], item_row["ItemId"], deal))
     feedback = pd.DataFrame(feedback, columns=['UserId', 'ItemId', 'Feedback'])
     batch_size = 512

@@ -46,8 +46,24 @@ def construct_probability_density(points, L_values):
 
     # Create a Gaussian KDE object
     pts = np.vstack([point for point in points]).T
-    kde = sps.gaussian_kde(pts, bw_method=0.1, weights=normalized_values)
+    # kde = sps.gaussian_kde(pts, bw_method=0.2, weights=normalized_values)
+    kde = sps.gaussian_kde(pts, weights=normalized_values)
+
     return kde
+
+class LValuesHandler():
+    def __init__(self):
+        self.L_values = np.array([])
+        self.points = []
+    def append(self, points, L_values, alpha=1):
+        self.points = self.points + points
+        memory = 3
+        self.L_values = np.concatenate((self.L_values / alpha, L_values))
+        if len(self.L_values) > len(L_values) * memory:
+            self.points = self.points [-len(L_values) * memory:]
+            self.L_values = np.array(self.L_values[-len(L_values) * memory:])
+        return self.points, self.L_values
+
 
 def print_3D(p):
     x = np.linspace(-1, 1, 100)
