@@ -51,35 +51,21 @@ def construct_probability_density(points, L_values):
 
     return kde
 
-class LValuesHandler():
-    def __init__(self):
-        self.L_values = np.array([])
-        self.points = []
-    def append(self, points, L_values, alpha=1):
-        self.points = self.points + points
-        memory = 3
-        self.L_values = np.concatenate((self.L_values / alpha, L_values))
-        if len(self.L_values) > len(L_values) * memory:
-            self.points = self.points [-len(L_values) * memory:]
-            self.L_values = np.array(self.L_values[-len(L_values) * memory:])
-        return self.points, self.L_values
+# class LValuesHandler():
+#     def __init__(self):
+#         self.L_values = np.array([])
+#         self.points = []
+#     def append(self, points, L_values, alpha=1):
+#         self.points = self.points + points
+#         memory = 3
+#         self.L_values = np.concatenate((self.L_values / alpha, L_values))
+#         if len(self.L_values) > len(L_values) * memory:
+#             self.points = self.points [-len(L_values) * memory:]
+#             self.L_values = np.array(self.L_values[-len(L_values) * memory:])
+#         return self.points, self.L_values
 
 
-def print_3D(p):
-    x = np.linspace(-1, 1, 100)
-    y = np.linspace(-1, 1, 100)
-    X, Y = np.meshgrid(x, y)
-    positions = np.vstack([X.ravel(), Y.ravel()])
 
-    # Evaluate the probability density function at the grid points
-    Z = np.reshape(p(positions).T, X.shape)
-
-    plt.contourf(X, Y, Z, levels=20, cmap=cm.viridis)
-    plt.colorbar(label="Probability Density")
-    plt.xlabel("x")
-    plt.ylabel("y")
-    plt.title("Probability Density Function p(x, y)")
-    plt.show()
 
 
 def L(x, y):

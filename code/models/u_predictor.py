@@ -4,8 +4,10 @@ import torch.nn as nn
 import scipy.stats as sps
 from torch.utils.data import DataLoader
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import cm
 
-from helper import DistributionHandler, print_distributions, construct_probability_density, LValuesHandler
+from helper import DistributionHandler, print_distributions, construct_probability_density
 
 
 class FeedbackDataset:
@@ -50,16 +52,59 @@ class NeuralNetwork(nn.Module):
     def get_interacted_items(self, user_id):
         return self.ratings.loc[self.ratings.UserId == user_id]['ItemId'].unique()
 
-    def recommend_topN(self, user_info, items_to_recommend, topn=10):
+    def recommend_topN(self, user_info, items_to_recommend, u_pred_case=1, topn=10):
         with torch.no_grad():
             n = min(topn, len(items_to_recommend.index))
             features = items_to_recommend["F"].to_numpy()
             x = np.vstack((np.array([user_info["F"]] * len(features)), features)).T
             x = (torch.from_numpy(x)).type(torch.FloatTensor).to(self.device)
             y_pred = self.__call__(x)[:, 1]
+            if u_pred_case == 1:
+                res = torch.topk(y_pred, k=n)
+                return pd.DataFrame({"ItemId": res.indices.cpu().numpy(), "Rating": res.values.cpu().numpy()})
+            elif u_pred_case == 2:
+                res = pd.DataFrame({"ItemId": np.arange(len(features)), "Rating": y_pred.cpu().numpy()})
+                res["Rating"] = res["Rating"].transform(lambda x: 1 if x >= 0.5 else 0)
+                max_buy = res["Rating"].sum()
+                if max_buy >= n:
+                    return res[res["Rating"] == 1].sample(n=n)
+                else:
+                    return pd.concat([res[res["Rating"] == 0].sample(n=n - max_buy), res[res["Rating"] == 1]], axis=0)
 
-            res = torch.topk(y_pred, k=n)
-            return pd.DataFrame({"ItemId": res.indices.cpu().numpy(), "Rating": res.values.cpu().numpy()})
+    def print_3D(self, u, z, u_pred_case=1):
+        x = np.linspace(-2, 2, 100)
+        y = np.linspace(-2, 2, 100)
+        X, Y = np.meshgrid(x, y)
+        positions, Z_pred = self.get_prediction_pair(x, y, u_pred_case=u_pred_case)
+        Z_true = []
+        for pos in positions:
+            Z_true.append(u(pos[0], pos[1], z()))
+        Z_true = np.reshape(Z_true, X.shape)
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        ax.plot_surface(X, Y, Z_pred)
+        plt.xlabel("x")
+        plt.ylabel("y")
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        ax.plot_surface(X, Y, Z_true)
+        # plt.contour(X, Y, np.reshape(Z_true, X.shape), levels=20)
+        plt.xlabel("x")
+        plt.ylabel("y")
+
+    def get_prediction_pair(self, x, y, u_pred_case=1):
+        X, Y = np.meshgrid(x, y)
+        positions = np.vstack([X.ravel(), Y.ravel()]).T
+        Z_pred = None
+        with torch.no_grad():
+            positions = (torch.from_numpy(positions)).type(torch.FloatTensor).to(self.device)
+            # Evaluate the probability density function at the grid points
+            Z_pred = np.reshape(self.__call__(positions)[:, 1].cpu().numpy(), X.shape)
+        if u_pred_case == 1:
+            return Z_pred
+        else:
+            vectorized = np.vectorize(lambda x: 1 if x >= 0.5 else 0)
+            return positions, vectorized(Z_pred)
 
     def fit_epoch(self, loader):
         self.train()
@@ -131,7 +176,11 @@ def rosenblatt_test(x, y, alpha=0.05):
     return (z - expected_z) / np.sqrt(variance_z * 45) + 1 / 6, rosenblatt_quantiles[1 - alpha]
 
 
-def dynamic_system_iterate_u(model, usefulness, z, c_w_distribution, L_handler, u_pred_case=1, c_size=8, w_size=8,
+def get_cartesian(x, y):
+    return np.transpose([np.tile(x, len(y)), np.repeat(y, len(x))])
+
+
+def dynamic_system_iterate_u(model, usefulness, z, c_w_distribution, u_pred_case=1, c_size=8, w_size=8,
                              topn=8, visualize_distributions=None):
     current_sample = c_w_distribution.rvs(size=max(c_size, w_size))
     user_info = pd.DataFrame(
@@ -141,25 +190,35 @@ def dynamic_system_iterate_u(model, usefulness, z, c_w_distribution, L_handler, 
     item_info = pd.DataFrame(
         {"F": current_sample[1][:w_size]})  # size = (w_size, w_feature_size) в многомерном случае
     item_info["ItemId"] = np.arange(w_size)
-    #
-    # print(item_info)
-    # print(user_info)
+
     if visualize_distributions is not None:
         print_distributions(visualize_distributions[0], visualize_distributions[1], user_info, item_info,
                             current_sample)
+        model.print_3D(usefulness, z)
 
-    predicted_feedback_1 = []
-    predicted_feedback_2 = []
+    L_values = []
+    points = []
+
+
+
+    for index, user_row in user_info.iterrows():
+        w_offered = model.recommend_topN(user_row, item_info, u_pred_case=2, topn=len(item_info.index))
+        for _, w in w_offered.iterrows():
+            feature = item_info.loc[item_info.ItemId == w.ItemId]["F"].item()
+            predicted_deal = sps.bernoulli.rvs(w["Rating"])
+            points.append((user_row["F"], feature))
+            u_true = usefulness(user_row["F"], feature, z())
+            L_values.append((u_true - predicted_deal) ** 2)
+
+    predicted_feedback = []
     real_feedback = []
 
     diff_feedback = []
-    L_values = []
-    points = []
+
     for index, user_row in user_info.iterrows():
-        w_offered = model.recommend_topN(user_row, item_info, topn=topn)
+        w_offered = model.recommend_topN(user_row, item_info, u_pred_case=2, topn=topn)
         cur_diff_feadback = []
-        predicted_cur_match_1 = []
-        predicted_cur_match_2 = []
+        predicted_cur_match = []
         for _, w in w_offered.iterrows():
             feature = item_info.loc[item_info.ItemId == w.ItemId]["F"].item()
             points.append((user_row["F"], feature))
@@ -169,19 +228,13 @@ def dynamic_system_iterate_u(model, usefulness, z, c_w_distribution, L_handler, 
 
             real_feedback.append((user_row["UserId"], w["ItemId"], real_deal))
 
-            predicted_deal_1 = sps.bernoulli.rvs(w["Rating"])
-            predicted_deal_2 = 1 if w["Rating"] >= 0.5 else 0
-            predicted_cur_match_1.append(1 if predicted_deal_1 == real_deal else 0)
-            predicted_cur_match_2.append(1 if predicted_deal_2 == real_deal else 0)
+            predicted_deal = sps.bernoulli.rvs(w["Rating"])
+            predicted_cur_match.append(1 if predicted_deal == real_deal else 0)
 
-            if u_pred_case == 1:
-                L_values.append((u_true - w["Rating"]) ** 2)
-            else:
-                L_values.append((u_true - predicted_deal_2) ** 2)
+            L_values.append((u_true - predicted_deal) ** 2)
             cur_diff_feadback.append(w["Rating"] - u_true)
         diff_feedback.append(np.array(cur_diff_feadback).mean())
-        predicted_feedback_1.append(np.array(predicted_cur_match_1).mean())
-        predicted_feedback_2.append(np.array(predicted_cur_match_2).mean())
+        predicted_feedback.append(np.array(predicted_cur_match).mean())
 
     new_feedback_df = pd.DataFrame(real_feedback, columns=['UserId', 'ItemId', 'Feedback'])
 
@@ -191,14 +244,11 @@ def dynamic_system_iterate_u(model, usefulness, z, c_w_distribution, L_handler, 
 
     model.fit_epoch(train_data_loader)
 
-
     # print("\n-----------------------------------------", list(zip(points, L_values)))
 
-    points, L_values = L_handler.append(points, np.array(L_values))
     c_w_distribution = DistributionHandler(construct_probability_density(points, np.array(L_values)))
 
-    return c_w_distribution, (
-        np.array(predicted_feedback_1).mean(), np.array(predicted_feedback_2).mean()), sps.gaussian_kde(
+    return c_w_distribution, np.array(predicted_feedback).mean(), sps.gaussian_kde(
         diff_feedback).pdf(0)
 
 
@@ -213,9 +263,11 @@ def init_data(customer_distribution, w_distribution, start_c_size, start_w_size,
 
     for i, user_row in user_info.iterrows():
         for j, item_row in item_info.iterrows():
-            deal = sps.bernoulli.rvs(usefulness(user_row["F"], item_row["F"], z()))
+            val = usefulness(user_row["F"], item_row["F"], z())
+            deal = sps.bernoulli.rvs(val)
             feedback.append((user_row["UserId"], item_row["ItemId"], deal))
     feedback = pd.DataFrame(feedback, columns=['UserId', 'ItemId', 'Feedback'])
     batch_size = 512
     train_dataset = FeedbackDataset(feedback, user_info, item_info)
-    return DataLoader(train_dataset, batch_size=batch_size, shuffle=True), DistributionHandler((customer_distribution, w_distribution))
+    return DataLoader(train_dataset, batch_size=batch_size, shuffle=True), DistributionHandler(
+        (customer_distribution, w_distribution))
