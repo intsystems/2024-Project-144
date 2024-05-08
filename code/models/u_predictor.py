@@ -37,7 +37,10 @@ class NeuralNetwork(nn.Module):
         self.model = nn.Sequential(
             nn.Linear(input_shape, 512),
             nn.ReLU(),
-            nn.Linear(512, 32),
+            nn.Linear(512, 256),
+            nn.LeakyReLU(),
+            nn.Sigmoid(),
+            nn.Linear(256, 32),
             nn.Sigmoid(),
             nn.Linear(32, num_classes),
             nn.Sigmoid(),
