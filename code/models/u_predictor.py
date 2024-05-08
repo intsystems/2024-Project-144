@@ -188,15 +188,15 @@ def dynamic_system_iterate_u(model, usefulness, z, L, c_w_distribution, u_pred_c
         {"F": current_sample[1][:w_size]})  # size = (w_size, w_feature_size) в многомерном случае
     item_info["ItemId"] = np.arange(w_size)
 
-    # x = user_info["F"].to_numpy()
-    # y = item_info["F"].to_numpy()
-    # points, Z_pred = model.get_prediction_pair(x, y, u_pred_case=u_pred_case)
-    # L_values = []
-    # Z_true = []
-    # for i, pos in enumerate(points):
-    #     u_true = usefulness(pos[0], pos[1], z())
-    #     Z_true.append(u_true)
-    #     L_values.append(L(u_true, Z_pred[i]))
+    x = user_info["F"].to_numpy()
+    y = item_info["F"].to_numpy()
+    points, Z_pred = model.get_prediction_pair(x, y, u_pred_case=u_pred_case)
+    L_values = []
+    Z_true = []
+    for i, pos in enumerate(points):
+        u_true = usefulness(pos[0], pos[1], z())
+        Z_true.append(u_true)
+        L_values.append(L(u_true, Z_pred[i]))
 
 
     if visualize_distributions is not None:
@@ -208,7 +208,7 @@ def dynamic_system_iterate_u(model, usefulness, z, L, c_w_distribution, u_pred_c
     predicted_feedback = []
     real_feedback = []
     L_metric = []
-    points = []
+    # points = []
     diff_feedback = []
 
     for index, user_row in user_info.iterrows():
@@ -220,7 +220,7 @@ def dynamic_system_iterate_u(model, usefulness, z, L, c_w_distribution, u_pred_c
 
             u_true = usefulness(user_row["F"], feature, z())
             L_metric.append(L(u_true, w["Rating"]))
-            points.append((user_row["F"], feature))
+            # points.append((user_row["F"], feature))
 
             real_deal = sps.bernoulli.rvs(u_true)  # моделируем сделки
             real_feedback.append((user_row["UserId"], w["ItemId"], real_deal))
@@ -243,7 +243,7 @@ def dynamic_system_iterate_u(model, usefulness, z, L, c_w_distribution, u_pred_c
     # if visualize_distributions is not None:
     #     model.print_3D(x, y, Z_pred, Z_true)
 
-    c_w_distribution = DistributionHandler(construct_probability_density(points, np.array(L_metric)))
+    c_w_distribution = DistributionHandler(construct_probability_density(points, np.array(L_values)))
     # debug = pd.DataFrame(points, columns=['points_x', 'points_y'])
     # debug["L"] = L_metric
     # print(debug.sort_values(by="points_y", ascending=False))
