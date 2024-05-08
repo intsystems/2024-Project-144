@@ -89,7 +89,6 @@ def zero_step(model: CMFRecommender, usefulness, z, user_info, item_info, topn=1
     for i in range(topn):
         user_id = np.random.choice(round(maximal_user) - 1)
         for index, item_row in item_info.iterrows():
-
             deal = sps.bernoulli.rvs(
                 usefulness(old_users.loc[user_id]["F"], item_row["F"], z))  # моделируем сделки
             new_feedback.append((user_id, item_row["ItemId"], deal))

@@ -37,10 +37,7 @@ class NeuralNetwork(nn.Module):
         self.model = nn.Sequential(
             nn.Linear(input_shape, 512),
             nn.ReLU(),
-            nn.Linear(512, 256),
-            nn.LeakyReLU(),
-            nn.Sigmoid(),
-            nn.Linear(256, 32),
+            nn.Linear(512, 32),
             nn.Sigmoid(),
             nn.Linear(32, num_classes),
             nn.Sigmoid(),
@@ -71,14 +68,9 @@ class NeuralNetwork(nn.Module):
                 else:
                     return pd.concat([res[res["Rating"] == 0].sample(n=n - max_buy), res[res["Rating"] == 1]], axis=0)
 
-    def print_3D(self, u, z, u_pred_case=1):
-        x = np.linspace(-2, 2, 100)
-        y = np.linspace(-2, 2, 100)
+    def print_3D(self, x, y, Z_pred, Z_true):
         X, Y = np.meshgrid(x, y)
-        positions, Z_pred = self.get_prediction_pair(x, y, u_pred_case=u_pred_case)
-        Z_true = []
-        for pos in positions:
-            Z_true.append(u(pos[0], pos[1], z()))
+        Z_pred = np.reshape(Z_pred, X.shape)
         Z_true = np.reshape(Z_true, X.shape)
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
@@ -99,9 +91,11 @@ class NeuralNetwork(nn.Module):
         with torch.no_grad():
             positions = (torch.from_numpy(positions)).type(torch.FloatTensor).to(self.device)
             # Evaluate the probability density function at the grid points
-            Z_pred = np.reshape(self.__call__(positions)[:, 1].cpu().numpy(), X.shape)
+            Z_pred = self.__call__(positions)[:, 1].cpu().numpy()
+            positions = positions.cpu().numpy()
+
         if u_pred_case == 1:
-            return Z_pred
+            return positions, Z_pred
         else:
             vectorized = np.vectorize(lambda x: 1 if x >= 0.5 else 0)
             return positions, vectorized(Z_pred)
@@ -180,7 +174,7 @@ def get_cartesian(x, y):
     return np.transpose([np.tile(x, len(y)), np.repeat(y, len(x))])
 
 
-def dynamic_system_iterate_u(model, usefulness, z, c_w_distribution, u_pred_case=1, c_size=8, w_size=8,
+def dynamic_system_iterate_u(model, usefulness, z, L, c_w_distribution, u_pred_case=1, c_size=8, w_size=8,
                              topn=8, visualize_distributions=None):
     current_sample = c_w_distribution.rvs(size=max(c_size, w_size))
     user_info = pd.DataFrame(
@@ -191,64 +185,68 @@ def dynamic_system_iterate_u(model, usefulness, z, c_w_distribution, u_pred_case
         {"F": current_sample[1][:w_size]})  # size = (w_size, w_feature_size) в многомерном случае
     item_info["ItemId"] = np.arange(w_size)
 
+    # x = user_info["F"].to_numpy()
+    # y = item_info["F"].to_numpy()
+    # points, Z_pred = model.get_prediction_pair(x, y, u_pred_case=u_pred_case)
+    # L_values = []
+    # Z_true = []
+    # for i, pos in enumerate(points):
+    #     u_true = usefulness(pos[0], pos[1], z())
+    #     Z_true.append(u_true)
+    #     L_values.append(L(u_true, Z_pred[i]))
+
+
     if visualize_distributions is not None:
         print_distributions(visualize_distributions[0], visualize_distributions[1], user_info, item_info,
                             current_sample)
-        model.print_3D(usefulness, z)
+        # model.print_3D(x, y, Z_pred, Z_true)
 
-    L_values = []
-    points = []
-
-
-
-    for index, user_row in user_info.iterrows():
-        w_offered = model.recommend_topN(user_row, item_info, u_pred_case=2, topn=len(item_info.index))
-        for _, w in w_offered.iterrows():
-            feature = item_info.loc[item_info.ItemId == w.ItemId]["F"].item()
-            predicted_deal = sps.bernoulli.rvs(w["Rating"])
-            points.append((user_row["F"], feature))
-            u_true = usefulness(user_row["F"], feature, z())
-            L_values.append((u_true - predicted_deal) ** 2)
 
     predicted_feedback = []
     real_feedback = []
-
+    L_metric = []
+    points = []
     diff_feedback = []
 
     for index, user_row in user_info.iterrows():
-        w_offered = model.recommend_topN(user_row, item_info, u_pred_case=2, topn=topn)
+        w_offered = model.recommend_topN(user_row, item_info, u_pred_case=u_pred_case, topn=topn)
         cur_diff_feadback = []
         predicted_cur_match = []
         for _, w in w_offered.iterrows():
             feature = item_info.loc[item_info.ItemId == w.ItemId]["F"].item()
-            points.append((user_row["F"], feature))
 
             u_true = usefulness(user_row["F"], feature, z())
+            L_metric.append(L(u_true, w["Rating"]))
+            points.append((user_row["F"], feature))
+
             real_deal = sps.bernoulli.rvs(u_true)  # моделируем сделки
-
             real_feedback.append((user_row["UserId"], w["ItemId"], real_deal))
-
             predicted_deal = sps.bernoulli.rvs(w["Rating"])
             predicted_cur_match.append(1 if predicted_deal == real_deal else 0)
 
-            L_values.append((u_true - predicted_deal) ** 2)
             cur_diff_feadback.append(w["Rating"] - u_true)
-        diff_feedback.append(np.array(cur_diff_feadback).mean())
-        predicted_feedback.append(np.array(predicted_cur_match).mean())
+        diff_feedback.append(np.mean(cur_diff_feadback))
+        predicted_feedback.append(np.mean(predicted_cur_match))
 
     new_feedback_df = pd.DataFrame(real_feedback, columns=['UserId', 'ItemId', 'Feedback'])
-
     batch_size = 512
     train_dataset = FeedbackDataset(new_feedback_df, user_info, item_info)
     train_data_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-
-    model.fit_epoch(train_data_loader)
+    loss, _ = model.fit_epoch(train_data_loader)
 
     # print("\n-----------------------------------------", list(zip(points, L_values)))
 
-    c_w_distribution = DistributionHandler(construct_probability_density(points, np.array(L_values)))
 
-    return c_w_distribution, np.array(predicted_feedback).mean(), sps.gaussian_kde(
+    # if visualize_distributions is not None:
+    #     model.print_3D(x, y, Z_pred, Z_true)
+
+    c_w_distribution = DistributionHandler(construct_probability_density(points, np.array(L_metric)))
+    # debug = pd.DataFrame(points, columns=['points_x', 'points_y'])
+    # debug["L"] = L_metric
+    # print(debug.sort_values(by="points_y", ascending=False))
+    # return c_w_distribution, np.array(predicted_feedback).mean(), loss, sps.gaussian_kde(
+    #     diff_feedback).pdf(0)
+    return c_w_distribution, np.array(predicted_feedback).mean(), loss, np.mean(L_metric), sps.gaussian_kde(
         diff_feedback).pdf(0)
 
 
