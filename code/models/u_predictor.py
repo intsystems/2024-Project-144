@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
-
+from scipy.interpolate import interp1d
 from helper import DistributionHandler, print_distributions, construct_probability_density
 
 
@@ -35,14 +35,13 @@ class NeuralNetwork(nn.Module):
         self.loss_function = loss_function
 
         self.model = nn.Sequential(
-            nn.Linear(input_shape, 512),
+            nn.Linear(input_shape, 32),
             nn.ReLU(),
-            nn.Linear(512, 256),
-            nn.LeakyReLU(),
-            nn.Sigmoid(),
-            nn.Linear(256, 32),
-            nn.Sigmoid(),
-            nn.Linear(32, num_classes),
+            nn.Linear(32, 16),
+            nn.ReLU(),
+            nn.Linear(16, 8),
+            nn.ReLU(),
+            nn.Linear(8, num_classes),
             nn.Sigmoid(),
         )
 
@@ -188,15 +187,16 @@ def dynamic_system_iterate_u(model, usefulness, z, L, c_w_distribution, u_pred_c
         {"F": current_sample[1][:w_size]})  # size = (w_size, w_feature_size) в многомерном случае
     item_info["ItemId"] = np.arange(w_size)
 
-    x = user_info["F"].to_numpy()
-    y = item_info["F"].to_numpy()
-    points, Z_pred = model.get_prediction_pair(x, y, u_pred_case=u_pred_case)
-    L_values = []
-    Z_true = []
-    for i, pos in enumerate(points):
-        u_true = usefulness(pos[0], pos[1], z())
-        Z_true.append(u_true)
-        L_values.append(L(u_true, Z_pred[i]))
+    points = []
+    # x = np.linspace(user_info["F"].min(), user_info["F"].max(), 100)
+    # y = np.linspace(item_info["F"].min(), item_info["F"].max(), 100)
+    # points, Z_pred = model.get_prediction_pair(x, y, u_pred_case=u_pred_case)
+    # L_values = []
+    # Z_true = []
+    # for i, pos in enumerate(points):
+    #     u_true = usefulness(pos[0], pos[1], z())
+    #     Z_true.append(u_true)
+    #     L_values.append(L(u_true, Z_pred[i]))
 
 
     if visualize_distributions is not None:
@@ -218,17 +218,17 @@ def dynamic_system_iterate_u(model, usefulness, z, L, c_w_distribution, u_pred_c
         for _, w in w_offered.iterrows():
             feature = item_info.loc[item_info.ItemId == w.ItemId]["F"].item()
 
-            u_true = usefulness(user_row["F"], feature, z())
-            L_metric.append(L(u_true, w["Rating"]))
-            # points.append((user_row["F"], feature))
+            u_true = usefulness(user_row["F"].item(), feature, z())
+            L_metric.append(L(u_true, w["Rating"].item()))
+            points.append((user_row["F"], feature))
 
             real_deal = sps.bernoulli.rvs(u_true)  # моделируем сделки
-            real_feedback.append((user_row["UserId"], w["ItemId"], real_deal))
-            predicted_deal = sps.bernoulli.rvs(w["Rating"])
+            real_feedback.append((user_row["UserId"].item(), w["ItemId"].item(), real_deal))
+            predicted_deal = sps.bernoulli.rvs(w["Rating"].item())
             predicted_cur_match.append(1 if predicted_deal == real_deal else 0)
 
-            cur_diff_feadback.append(w["Rating"] - u_true)
-        diff_feedback.append(np.mean(cur_diff_feadback))
+            cur_diff_feadback.append(w["Rating"].item() - u_true)
+        diff_feedback = np.hstack([diff_feedback, cur_diff_feadback])
         predicted_feedback.append(np.mean(predicted_cur_match))
 
     new_feedback_df = pd.DataFrame(real_feedback, columns=['UserId', 'ItemId', 'Feedback'])
@@ -243,14 +243,17 @@ def dynamic_system_iterate_u(model, usefulness, z, L, c_w_distribution, u_pred_c
     # if visualize_distributions is not None:
     #     model.print_3D(x, y, Z_pred, Z_true)
 
-    c_w_distribution = DistributionHandler(construct_probability_density(points, np.array(L_values)))
+    c_w_distribution = DistributionHandler(construct_probability_density(points, np.array(L_metric)))
     # debug = pd.DataFrame(points, columns=['points_x', 'points_y'])
     # debug["L"] = L_metric
     # print(debug.sort_values(by="points_y", ascending=False))
     # return c_w_distribution, np.array(predicted_feedback).mean(), loss, sps.gaussian_kde(
     #     diff_feedback).pdf(0)
-    return c_w_distribution, np.array(predicted_feedback).mean(), loss, np.mean(L_metric), sps.gaussian_kde(
-        diff_feedback).pdf(0)
+    hst = np.histogram(diff_feedback, density=True, bins=200)
+    f_t = interp1d(hst[1][:-1], hst[0], kind='linear',
+                   fill_value=0.0, bounds_error=False)
+    return (c_w_distribution, np.array(predicted_feedback).mean(), loss, np.mean(L_metric), f_t(0.0),
+            (user_info["F"].mean(), item_info["F"].mean()), (user_info["F"].var(), item_info["F"].var()))
 
 
 def init_data(customer_distribution, w_distribution, start_c_size, start_w_size, usefulness, z):
@@ -264,9 +267,9 @@ def init_data(customer_distribution, w_distribution, start_c_size, start_w_size,
 
     for i, user_row in user_info.iterrows():
         for j, item_row in item_info.iterrows():
-            val = usefulness(user_row["F"], item_row["F"], z())
+            val = usefulness(user_row["F"].item(), item_row["F"].item(), z())
             deal = sps.bernoulli.rvs(val)
-            feedback.append((user_row["UserId"], item_row["ItemId"], deal))
+            feedback.append((user_row["UserId"].item(), item_row["ItemId"].item(), deal))
     feedback = pd.DataFrame(feedback, columns=['UserId', 'ItemId', 'Feedback'])
     batch_size = 512
     train_dataset = FeedbackDataset(feedback, user_info, item_info)

@@ -28,6 +28,7 @@ def print_distributions(num_of_iteration, axs, user_info, item_info, c_w_sample)
     axs[0].set_title("User Distribution")
     sns.kdeplot(data=item_info["F"], ax=axs[1])
     axs[1].set_title("Item Distribution")
+    # axs[1].set_ylim(0, 10)
     plt.figure()
     sns.kdeplot(data=pd.DataFrame({"CustomerF": c_w_sample[0], "ItemF": c_w_sample[1]}), x="CustomerF", y="ItemF", cmap=cm.viridis)
 
