@@ -35,7 +35,7 @@ def print_distributions(num_of_iteration, axs, user_info, item_info, c_w_sample)
 
 def inverse_function(L):
     epsilon = 1e-8  # Small constant to avoid division by zero
-    return 1 / (L + epsilon)
+    return -np.log(L + 0.01)
 
 
 def construct_probability_density(points, L_values):
@@ -48,7 +48,7 @@ def construct_probability_density(points, L_values):
     # Create a Gaussian KDE object
     pts = np.vstack([point for point in points]).T
     # kde = sps.gaussian_kde(pts, bw_method=0.2, weights=normalized_values)
-    kde = sps.gaussian_kde(pts, weights=normalized_values)
+    kde = sps.gaussian_kde(pts, bw_method=0.1, weights=normalized_values)
 
     return kde
 

@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 from scipy.interpolate import interp1d
 from helper import DistributionHandler, print_distributions, construct_probability_density
+from scipy.interpolate import griddata
 
 
 class FeedbackDataset:
@@ -35,18 +36,33 @@ class NeuralNetwork(nn.Module):
         self.loss_function = loss_function
 
         self.model = nn.Sequential(
-            nn.Linear(input_shape, 32),
+            # nn.Linear(input_shape, 512),
+            # nn.ReLU(),
+            # nn.Linear(512, 256),
+            # nn.Tanh(),
+            # nn.Linear(256, 64),
+            # nn.ReLU(),
+            # nn.Linear(64, 16),
+            # nn.Sigmoid(),
+            # nn.Linear(16, 8),
+            # nn.ReLU(),
+            # nn.Linear(8, num_classes),
+            # nn.Sigmoid(),
+            nn.Linear(input_shape, 1024),
             nn.ReLU(),
-            nn.Linear(32, 16),
+            nn.Linear(1024, 256),
             nn.ReLU(),
-            nn.Linear(16, 8),
+            nn.Linear(256, 32),
             nn.ReLU(),
-            nn.Linear(8, num_classes),
+            nn.Linear(32, num_classes),
             nn.Sigmoid(),
         )
 
     def set_optimizer(self, optimizer):
         self.optimizer = optimizer
+
+    def set_scheduler(self, scheduler):
+        self.scheduler = scheduler
 
     def get_interacted_items(self, user_id):
         return self.ratings.loc[self.ratings.UserId == user_id]['ItemId'].unique()
@@ -56,6 +72,8 @@ class NeuralNetwork(nn.Module):
             n = min(topn, len(items_to_recommend.index))
             features = items_to_recommend["F"].to_numpy()
             x = np.vstack((np.array([user_info["F"]] * len(features)), features)).T
+            # print("-------------X-------------")
+            # print(x)
             x = (torch.from_numpy(x)).type(torch.FloatTensor).to(self.device)
             y_pred = self.__call__(x)[:, 1]
             if u_pred_case == 1:
@@ -82,6 +100,7 @@ class NeuralNetwork(nn.Module):
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
         ax.plot_surface(X, Y, Z_true)
+        # fig = plt.figure()
         # plt.contour(X, Y, np.reshape(Z_true, X.shape), levels=20)
         plt.xlabel("x")
         plt.ylabel("y")
@@ -107,7 +126,7 @@ class NeuralNetwork(nn.Module):
         processed_size = 0
         cumulative_loss = 0.0
         correct = 0
-
+        loss_hist = []
         for x_batch, y_batch in loader:
             x_batch = x_batch.type(torch.FloatTensor).to(self.device)
             y_batch = y_batch.type(torch.FloatTensor).to(self.device)
@@ -118,11 +137,14 @@ class NeuralNetwork(nn.Module):
             loss.backward()
 
             self.optimizer.step()
+            self.scheduler.step()
             cumulative_loss += loss
+            loss_hist.append(loss.item())
             processed_size += x_batch.shape[0]
             correct += torch.sum(torch.argmax(y_pred, dim=1) == y_batch)
 
-        return cumulative_loss.item() / processed_size, correct.item() / processed_size
+        # return cumulative_loss.item() / processed_size, correct.item() / processed_size
+        return loss_hist, correct.item() / processed_size
 
     def forward(self, inp):
         out = self.model(inp)
@@ -188,15 +210,6 @@ def dynamic_system_iterate_u(model, usefulness, z, L, c_w_distribution, u_pred_c
     item_info["ItemId"] = np.arange(w_size)
 
     points = []
-    # x = np.linspace(user_info["F"].min(), user_info["F"].max(), 100)
-    # y = np.linspace(item_info["F"].min(), item_info["F"].max(), 100)
-    # points, Z_pred = model.get_prediction_pair(x, y, u_pred_case=u_pred_case)
-    # L_values = []
-    # Z_true = []
-    # for i, pos in enumerate(points):
-    #     u_true = usefulness(pos[0], pos[1], z())
-    #     Z_true.append(u_true)
-    #     L_values.append(L(u_true, Z_pred[i]))
 
 
     if visualize_distributions is not None:
@@ -213,6 +226,7 @@ def dynamic_system_iterate_u(model, usefulness, z, L, c_w_distribution, u_pred_c
 
     for index, user_row in user_info.iterrows():
         w_offered = model.recommend_topN(user_row, item_info, u_pred_case=u_pred_case, topn=topn)
+        # print(user_row, "\n-----------------\n", w_offered)
         cur_diff_feadback = []
         predicted_cur_match = []
         for _, w in w_offered.iterrows():
@@ -221,7 +235,7 @@ def dynamic_system_iterate_u(model, usefulness, z, L, c_w_distribution, u_pred_c
             u_true = usefulness(user_row["F"].item(), feature, z())
             L_metric.append(L(u_true, w["Rating"].item()))
             points.append((user_row["F"], feature))
-
+            # print(user_row["F"].item(), u_true,  w["Rating"].item())
             real_deal = sps.bernoulli.rvs(u_true)  # моделируем сделки
             real_feedback.append((user_row["UserId"].item(), w["ItemId"].item(), real_deal))
             predicted_deal = sps.bernoulli.rvs(w["Rating"].item())
@@ -239,9 +253,6 @@ def dynamic_system_iterate_u(model, usefulness, z, L, c_w_distribution, u_pred_c
 
     # print("\n-----------------------------------------", list(zip(points, L_values)))
 
-
-    # if visualize_distributions is not None:
-    #     model.print_3D(x, y, Z_pred, Z_true)
 
     c_w_distribution = DistributionHandler(construct_probability_density(points, np.array(L_metric)))
     # debug = pd.DataFrame(points, columns=['points_x', 'points_y'])
@@ -271,7 +282,7 @@ def init_data(customer_distribution, w_distribution, start_c_size, start_w_size,
             deal = sps.bernoulli.rvs(val)
             feedback.append((user_row["UserId"].item(), item_row["ItemId"].item(), deal))
     feedback = pd.DataFrame(feedback, columns=['UserId', 'ItemId', 'Feedback'])
-    batch_size = 512
+    batch_size = 1024
     train_dataset = FeedbackDataset(feedback, user_info, item_info)
     return DataLoader(train_dataset, batch_size=batch_size, shuffle=True), DistributionHandler(
         (customer_distribution, w_distribution))
