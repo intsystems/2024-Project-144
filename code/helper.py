@@ -35,7 +35,7 @@ def print_distributions(num_of_iteration, axs, user_info, item_info, c_w_sample)
 
 def inverse_function(L):
     epsilon = 1e-8  # Small constant to avoid division by zero
-    return -np.log(L + 0.01)
+    return 1/(L + 0.001)
 
 
 def construct_probability_density(points, L_values):

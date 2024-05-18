@@ -19,7 +19,11 @@
 \usepackage{sepfootnotes}
 \DeclareMathOperator\supp{supp}
 \usepackage{tikz}
-
+\usepackage{lmodern}
+\newtheorem{theorem}{Теорема}
+\newtheorem*{theorem-non}{Теорема}
+\usepackage[font=tiny,labelfont=bf]{caption}
+%...
 %----------------------------------------------------------------------------------------------------------
 
 \title[\hbox to 56mm{Многократное обучение}]{Вырождение распределений при  многократном  \\ обучении в рекомендательных системах}
@@ -47,83 +51,104 @@
 %-----------------------------------------------------------------------------------------------------
 
 \begin{frame}{Цель исследования}
+
+Мы рассматриваем системы рекомендации товаров пользователям. Изучаем поведение таких системы во времени. Наша задача состоит в том, чтобы развить результат полученный в статье [1] с учетом эффектов feedback loops [2] и filter bubbles [3].
     \begin{block}{Цель}
-        Исследование вырождения распределений пользователей и товаров в динамической системе с рекомендательным алгоритмом.
+        Исследование изменений распределений пользователей и товаров в динамической системе с рекомендательным алгоритмом.
     \end{block}
     \begin{block}{Задача}
-        Предложить алгоритм, который улучшает стандартные метрики для рекомендательных алгоримтов при условии, что в пределе не возникает вырождения распределения товаров и пользователей.
+        Предложить алгоритм, который повышает качество рекомендаций при условии, что не происходит вырождения(т.е. снижения разнообразия) товаров и пользователей.
     \end{block}
 
 \end{frame}
 
 %-----------------------------------------------------------------------------------------------------
 
-\begin{frame}{Алгоритм рекомендации}
+% \begin{frame}{Алгоритм рекомендации}
 
-\item  \footnotesize Функция $u_{\text{true}}(c, w, z)$ отражает интерес пользователя $c$ к товару
 
-\item  \footnotesize Сделка: $y_{c,w} \sim Bern(u_{\text{true}}(c, w, z))$
 
-\item Рассматриваем класс рекомендательных алгоритмов, которые оценивают $u_{\text{true}}(c, w, z)$ через $u_{\text{pred}}(c, w)$
+% \item  \footnotesize Сделка: $y_{c,w} \sim Bern(u_{\text{true}}(c, w, z))$
 
-\begin{columns}[c]
+% \item Рассматриваем класс рекомендательных алгоритмов, которые оценивают $u_{\text{true}}(c, w, z)$ через $u_{\text{pred}}(c, w)$
 
-    \column{0.55\textwidth}
-    Рекомендательный алгоритм:
-        \begin{enumerate}
-            \item Вычисляет функцию $u_{\text{pred}}(c, w)$ для всех $c,\ w$
-            \item Для каждого $c$ по функци $u_{\text{pred}}$ выбирает множество товаров размера $k$ для рекомендации: $\{w_{i_1},\ldots, w_{i_k}\}$
-        \end{enumerate}
+% \begin{columns}[c]
+
+%     \column{0.55\textwidth}
+%     Рекомендательный алгоритм:
+%         \begin{enumerate}
+%             \item Вычисляет функцию $u_{\text{pred}}(c, w)$ для всех $c,\ w$
+%             \item Для каждого $c$ по функци $u_{\text{pred}}$ выбирает множество товаров размера $k$ для рекомендации: $\{w_{i_1},\ldots, w_{i_k}\}$
+%         \end{enumerate}
     
-    \column{0.60\textwidth}
-        \begin{tikzpicture}
-            \node[draw, rectangle] (customer) at (0,0) {Customer $(c^{d_1},\ldots,c^{d_c})^T$};
-            \node[draw, circle, text width=2cm] (item1) at (-2,-3) {Item 1  $(w_1^{d_1},\ldots,w_1^{d_w})^T$};
-            \node[draw, circle, text width=2cm] (item2) at (2,-3) {Item 2 $(w_2^{d_1},\ldots,w_2^{d_w})^T$};
+%     \column{0.60\textwidth}
+%         \begin{tikzpicture}
+%             \node[draw, rectangle] (customer) at (0,0) {Customer $(c^{d_1},\ldots,c^{d_c})^T$};
+%             \node[draw, circle, text width=2cm] (item1) at (-2,-3) {Item 1  $(w_1^{d_1},\ldots,w_1^{d_w})^T$};
+%             \node[draw, circle, text width=2cm] (item2) at (2,-3) {Item 2 $(w_2^{d_1},\ldots,w_2^{d_w})^T$};
             
-            \draw[->, green] (customer.200) to[out=-135,in=90] node[midway, above, sloped] {\scriptsize $y_{c, w^1} = 1$} (item1);
-            \draw[->] (item1.45) to[out=45,in=-45] (customer.200);
+%             \draw[->, green] (customer.200) to[out=-135,in=90] node[midway, above, sloped] {\scriptsize $y_{c, w^1} = 1$} (item1);
+%             \draw[->] (item1.45) to[out=45,in=-45] (customer.200);
     
             
-            \draw[->, red] (customer.-20) to[out=-135,in=135] node[midway, above, sloped] {\scriptsize$y_{c, w^2} = 0$} (item2);
-            \draw[->] (item2.90) to[out=45,in=-45] (customer.-20);
+%             \draw[->, red] (customer.-20) to[out=-135,in=135] node[midway, above, sloped] {\scriptsize$y_{c, w^2} = 0$} (item2);
+%             \draw[->] (item2.90) to[out=45,in=-45] (customer.-20);
     
-        \end{tikzpicture}
+%         \end{tikzpicture}
 
-\end{columns}
-Примеры алгоритмов:
+% \end{columns}
+% Примеры алгоритмов:
 
-    \begin{itemize}
-        \item[-] TopPopularity
-        \item[-] Random
-        \item[-] Collaborative Filtering using SVD
-    \end{itemize}    
+%     \begin{itemize}
+%         \item[-] TopPopularity
+%         \item[-] Random
+%         \item[-] Collaborative Filtering using SVD
+%     \end{itemize}    
     
-\end{frame}
+% \end{frame}
 
 %-----------------------------------------------------------------------------------------------------
 
 
 \begin{frame}{Математическая постановка задачи}
- \scriptsize{Пользователи  и товары: $C \subset \mathbb{R}^d, W \subset \mathbb{R}^l$. На каждом шаге $t$ имеется совместное распределение: $(c, w)^T \sim p^{t}_{c,w} (x_c , x_w )$ \\
- $u^t_{\text{true}}: \mathbb{R}^{d_c} \times \mathbb{R}^{d_w} \times \Omega_z \to [0; 1]$ - функция полезности товара для данного пользователя.}
- \\
- $u^t_{\text{pred}}: \mathbb{R}^{d_c} \times \mathbb{R}^{d_w} \to [0; 1]$ - оценивающая $u^t_{\text{true}}$ функция.
+ \scriptsize{Пользователи  и товары: $C \subset \mathbb{R}^d, W \subset \mathbb{R}^l$. На каждом шаге $t$ имеется совместное распределение: $(c, w)^T \sim p^{t}_{c,w} (x_c , x_w )$
+ 
+ % $u^t_{\text{true}}: \mathbb{R}^{d_c} \times \mathbb{R}^{d_w} \times \Omega_z \to [0; 1]$ - функция полезности товара для данного пользователя.}
+ % \\
+\item
+Предполгаем, что существует функция $u_{\text{true}}(c, w, z)$, которая показывает вероятность совершения сделки. \\
+Рассмтриваемый класс рекомендательных алгоримтов: 
+\begin{enumerate}
+    \item Cтроит функцию  $u^t_{\text{pred}}(c, w)$, которая оценивает функцию $u^t_{\text{true}}$
+    \item Для каждого $c$ по функци $u_{\text{pred}}$ выбирает множество товаров размера $k$ для рекомендации: $\{w_{i_1},\ldots, w_{i_k}\}$
+\end{enumerate}}
 \\$D_t$ - оператор эволюции распределения:
 $p^{t + 1}(x_c, x_w) = \text{D}_t(p^{t})(x_c, x_w)$
 
-Будем говорить, что распределение $p^t(x)$ вырождается, если 
+Будем говорить, что распределение $p(x)$ вырождается, если 
 $$
-\mu (\supp p^{\infty}(x)) = 0,
-$$ где $p^{\infty} = \lim_{t\to \infty} {p^t(x)}
-$
+\mu (\supp p(x)) = 0,
+$$
 
     \begin{columns}[c]
-    
+        
         \column{0.6\textwidth}
-            \begin{figure}
-                    \includegraphics[width=0.9\textwidth]{images/degenerating.png}
-            \end{figure}
+            \begin{tikzpicture}
+                \node[draw, rectangle] (customer) at (0,0) {Customer $(c^{d_1},\ldots,c^{d_c})^T$};
+                \node[draw, circle, text width=2cm] (item1) at (-2,-3) {Item 1  $(w_1^{d_1},\ldots,w_1^{d_w})^T$};
+                \node[draw, circle, text width=2cm] (item2) at (2,-3) {Item 2 $(w_2^{d_1},\ldots,w_2^{d_w})^T$};
+                
+                \node[draw] at (0,-2) 
+                {\fontsize{5}{5}\selectfont  $y_{c,w} \sim Bern(u_{\text{true}})$};
+
+                \draw[->, green] (customer.200) to[out=-135,in=90] node[midway, above, sloped] {\scriptsize $y_{c, w^1} = 1$} (item1);
+                \draw[->] (item1.45) to[out=45,in=-45] (customer.200);
+        
+                
+                \draw[->, red] (customer.-20) to[out=-135,in=135] node[midway, above, sloped] {\scriptsize$y_{c, w^2} = 0$} (item2);
+                \draw[->] (item2.90) to[out=45,in=-45] (customer.-20);
+        
+            \end{tikzpicture}
             
         \column{0.6\textwidth}
             Введем функционал
@@ -139,27 +164,14 @@ $
 
 \end{frame}
 
-%-----------------------------------------------------------------------------------------------------
 
-\begin{frame}{Публикации по теме}
-    \begin{itemize}
-    
-    \item $[1]$ A. S. Vepricov, A. S. Khritankov. On the problem of repeated supervised learning \url{https://github.com/intsystems/2023-Project-119/blob/master/paper/M1P.pdf}.
-
-    \item $[2]$ Anton Khritankov. Positive feedback loops lead to concept drift in machine learning systems.
-
-
-    \item $[3]$ Jiang, Ray & Chiappa, Silvia & Lattimore, Tor & György, András & Kohli, Pushmeet. (2019). Degenerate Feedback Loops in Recommender Systems
-  
-    \end{itemize}
-\end{frame}
 
 %-----------------------------------------------------------------------------------------------------
 
 
 \begin{frame}{Критерии качества модели}
 
-Необходимым условием является невырождение распределения $p^t_{c,w}$ пользователей-товаров.
+Мы должны найти такой алгоритм, при использовании которого в динамической системе не происходит вырождение распределения $p^t_{c,w}$ пользователей-товаров.
 
 \begin{itemize}
     \item Вырождение распределения невязок: $u_{\text{true}} - u_{\text{pred}} \sim \delta(x)$, где $\delta(x)$ - дельта-функция Дирака.\\
@@ -180,19 +192,20 @@ $
 \begin{frame}{Основные результаты}
 
 \scriptsize
-Предположение:
-Пользователи и площадка с товарами ведут себя рационально, т.е. $p^{t+1}_{c, w}  \propto L^t(c, w)^{-1}$.
-
-$L^t(c, w) = \mathbb{E}_z[(u_{\text{true}}(c, w, z) - u_{\text{pred}}(c, w))^2]$\\
+\begin{theorem}
+    
+Пусть пользователи и площадка с товарами ведут себя рационально, т.е. $p^{t+1}_{c, w}  \propto L^t(c, w)^{-1}$, где а функция $u_{\text{true}}(c, w, z)$ существует. Тогда множество 
+вырождения $\Phi^t$ для $p^t_{c, w}$ в зависимости от $u_{\text{pred}}$ будет иметь следующий вид;
+% $L^t(c, w) = \mathbb{E}_z[(u_{\text{true}}(c, w, z) - u_{\text{pred}}(c, w))^2]$\\
 % Переписывается в виде:
 % $L^t(c, w) = \mathbb{D}_z[(u_{\text{true}}(c, w, z)] + \left(\mathbb{E}_z[(u_{\text{true}}(c, w, z)] - u_{\text{pred}}(c, w)\right)^2$
-Обозначим за $\Phi^t$ - множество вырождения для $p^t_{c, w}$
+% Обозначим за $\Phi^t$ - множество вырождения для $p^t_{c, w}$
 
 \begin{enumerate}
-    \item $u_{\text{pred}}(c, w) = \mathbb{E}_z[(u_{\text{true}}(c, w, z)]$, тогда $L^t(c, w) = \mathbb{D}_z[(u_{\text{true}}(c, w, z)]$\\
+    \item $u_{\text{pred}}(c, w) = \mathbb{E}_z[(u_{\text{true}}(c, w, z)]$
     $\Phi^t = \left\{ (x_c, x_w)^T \in \mathbb{R}^{d_c + d_w} \; | \; \mathbb{D}_z[(u_{\text{true}}(c, w, z)]=0 \; \right\}$\\
-    $\Phi^t$ - <<большое>> , поэтому вырождение пользователей-товаров может быть.
-    Предполагается вырождение по <<невязкам>>.
+    % Вырождение пользователей-товаров может быть.
+    % Предполагается вырождение по <<невязкам>>.
     
     \item
     $u_{\text{pred}}(c, w)$ = 
@@ -200,37 +213,36 @@ $L^t(c, w) = \mathbb{E}_z[(u_{\text{true}}(c, w, z) - u_{\text{pred}}(c, w))^2]$
        1, &\text{$\mathbb{E}_z[(u_{\text{true}}(c, w, z)] \geq \frac{1}{2} $}\\
        0, &\text{иначе}
     \end{cases} \\
-    $L^t(c, w) = \mathbb{D}_z[(u_{\text{true}}(c, w, z)] + \min \left(\mathbb{E}_z[(u_{\text{true}}(c, w, z)]^2; 1 -  \mathbb{E}_z[(u_{\text{true}}(c, w, z)]^2 \right)$\\
- 
+    
         $\Phi^t = \left\{ (x_c, x_w)^T \in \mathbb{R}^{d_c + d_w} \; | \; \text{для п.в. $x_z \in \Omega_z$ $u_{\text{true}}(c, w, z) = 1$ или 0 } \; \right\}$ \\
-        $\Phi^t$ - <<маленькое>>, поэтому вырождения пользователей-товаров скорее всего не будет.
+        % Вырождения пользователей-товаров скорее всего не будет.
 
         \textbf{Лемма}: при таком $u_{pred}$ максимизируется $\mathbb{P}(y_{\text{true}}=y_{\text{pred}})$
         
-    \item  $u_{\text{pred}}(c, w) = a $ (random)
+    \item  $u_{\text{pred}}(c, w) = a = const$
     $\Phi^t = \left\{ (x_c, x_w)^T \in \mathbb{R}^{d_c + d_w} \; | \; \text{для п.в. $x_z \in \Omega_z$ $u_{\text{true}}(c, w, z) = a$} \; \right\}$ \\
-        $\Phi^t$ - очень <<маленькое>>, поэтому вырождения пользователей-товаров скорее всего не будет (это и ожидается, так как алгоритм случайный).
-        Вырождения на невязках при этом точно не будет.
-
-    \item $u_{\text{pred}}(c, w) =  u_{\text{true}}(c, w, z)$ (oracle)
-    
-    
+        % $\Phi^t$ - очень <<маленькое>>, поэтому вырождения пользователей-товаров скорее всего не будет (это и ожидается, так как алгоритм случайный).
+        % Вырождения на невязках при этом точно не будет.
 \end{enumerate}
+\end{theorem}
 
+Выполнены вложения $\Phi^t_2 \subset \Phi^t_1$ и $\Phi^t_3 \subset \Phi^t_1$. Обратим внимание, что на точки, подходящие для $\Phi^t_2$ или $\Phi^t_3$ накладываются достаточно сильные ограничения. Это позволяет выдвинуть гипотезу, что вырождения при $u_{\text{pred}}(c, w) := u^{2,3}_{\text{pred}}(c, w)$ не будет, если $u_{\text{true}}$ почти всюду не равно 1 или 0.
 
 \end{frame}
 
 %----------------------------------------------------------------------------------------------------------
 
 \begin{frame}{Вычислительный эксперимент}
-
+\small
+    Данные будут использоваться синтетические:
+    $$u_{\text{true}}(c, w, z) = 0.95 \cdot \exp(-0.5((c - c_0)^2 + (w - w_0)^2 +z^2)), c_0 = 1, w_0 = 0.1$$
     Синтетический датасет:
         $\\
-        c \sim \mathcal{N}(0.6, 0.2), \qquad
-        w \sim \mathcal{N}(0, 0.4),  \qquad
+        c \sim \mathcal{N}(0.7, 0.3), \qquad
+        w \sim \mathcal{N}(0, 0.6),  \qquad
         z \sim \mathcal{N}(0, 0.05),  \qquad
         $
-
+    Реализован макет динамической системы во времени.
     Итерация системы выглядит следующим образом:
     \begin{enumerate}
         \item Генерируем распределение пользователей и товаров
@@ -238,9 +250,10 @@ $L^t(c, w) = \mathbb{E}_z[(u_{\text{true}}(c, w, z) - u_{\text{pred}}(c, w))^2]$
         \item С вероятностью, полученной из функции $u_{\text{true}}$ совершаем сделку
         \item На полученной информации о новых сделках строим новое распределение пользователей и товаров: $p_c^t$ и $p_w^t$ и обучаем модель на новых данных.
     \end{enumerate}
-
-    Оцениваем $accuracy@4$ и распределение $u_{true} - u_{pred}$ в точке 0
-
+    \scriptsize{
+    Эксперимент проводился на 50 итерациях. 
+    На каждой измерялись значения $accuracy@8$,значение функции распределения невязок в точке 0, среднего значения функцонала $L(c, w)$, дисперсии параметров пользователей и товаров.
+    }
 \end{frame}
 
 
@@ -248,50 +261,95 @@ $L^t(c, w) = \mathbb{E}_z[(u_{\text{true}}(c, w, z) - u_{\text{pred}}(c, w))^2]$
 %----------------------------------------------------------------------------------------------------------
 
 \begin{frame}
-    Присутствует вырождение на товарах
+    \begin{columns}[c]
+    
+        \column{0.7\textwidth}
+        \begin{figure}
+            \centering
+            \includegraphics[width=1\textwidth]{images/new_photo/u_1_distr.png}
+            \vspace*{-9mm}\caption{$u_{pred}^1$}
+        \end{figure}
+
+        \column{0.7\textwidth}
+        \begin{figure}
+            \centering
+            \includegraphics[width=1\textwidth]{images/new_photo/u_2_distr.png}
+            \vspace*{-9mm}\caption{$u_{pred}^2$}
+        \end{figure}
+
+     \vspace*{-12mm}\end{columns}
+        \begin{columns}[c]
+
+        \column{0.7\textwidth}
+        \begin{figure}
+            \centering
+            \includegraphics[width=1\textwidth]{images/new_photo/random_distr.png}
+             \vspace*{-9mm}\caption{random}
+        \end{figure}
+
+        \column{0.7\textwidth}
+        \begin{figure}
+            \centering
+            \includegraphics[width=1\textwidth]{images/new_photo/oracle_distr.png}
+             \vspace*{-9mm}\caption{oracle}
+        \end{figure}
+
+    \end{columns}
+\end{frame}
+
+
+\begin{frame}
+    Изменение дисперсий пользователей и товаров со временем
+    \begin{columns}[c]
+        \column{0.5\textwidth}
+        \begin{figure}
+            \centering
+            \includegraphics[width=1\textwidth]{images/new_photo/variance_item.png}
+            \caption{товары}
+        \end{figure}
+
+        \column{0.5\textwidth}
+        \begin{figure}
+            \centering
+            \includegraphics[width=1\textwidth]{images/new_photo/variance_user.png}
+            \caption{пользователи}
+        \end{figure}
+    \end{columns}
+    
+\end{frame}
+
+
+\begin{frame}
     \begin{columns}[c]
     
         \column{0.5\textwidth}
         \begin{figure}
             \centering
-            \includegraphics[width=0.9\textwidth]{images/f0.png}
+            \includegraphics[width=0.7\textwidth]{images/new_photo/accuracy.png}
+            \caption{Значение accuracy@8}
         \end{figure}
 
         \column{0.5\textwidth}
         \begin{figure}
             \centering
-            \includegraphics[width=0.9\textwidth]{images/accuracyk.png}
+            \includegraphics[width=0.7\textwidth]{images/new_photo/f.png}
+            \caption{Значение распределения невязок в точке 0}
         \end{figure}
 
     \end{columns}
+    
 
-    \begin{figure}
-        \centering
-        \includegraphics[width=0.8\textwidth]{images/distrChang2.png}
-    \end{figure}
+        \vspace*{-5mm}\begin{figure}
+            \centering
+            \includegraphics[width=0.4\textwidth]{images/new_photo/L.png}
+            \caption{Значение функционала L}
+        \end{figure}
+
     
 \end{frame}
 
-%----------------------------------------------------------------------------------------------------------
 
 
-
-\begin{frame}
-
-    Вырождения на распределениях нет
-    \begin{figure}
-        \centering
-        \includegraphics[width=0.5\textwidth]{images/noDegacc.png}
-    \end{figure}
-
-    \begin{figure}
-        \centering
-        \includegraphics[width=0.8\textwidth]{images/noDeg.png}
-    \end{figure}
-
-
-    
-\end{frame}
 
 
 %----------------------------------------------------------------------------------------------------------
@@ -299,17 +357,33 @@ $L^t(c, w) = \mathbb{E}_z[(u_{\text{true}}(c, w, z) - u_{\text{pred}}(c, w))^2]$
 
 \begin{frame}{Заключение}
 \begin{itemize}
-    \item Рассмотрены различные подходы к оцениванию реальной функции полезности и предложены гипотезы о вырождениях распределений в зависимости от этих функций.
-    \item Проведен вычислительный эксперимент на синтетических данных.
+    \item Построена математическая модель динамической во времени рекомендательной системы.  
+    \item Для определенного вида алгоримтов удалось найти вид множества вырождения пользователей-товаров.
+    \item Предложены гипотезы о вырождениях распределений в зависимости от алгоритма рекомендации.
+    \item Проведен вычислительный эксперимент на синтетических данных, который подтвердил теоретические результаты.
+
 \end{itemize}
 
-Планы:\\
-Доказать гипотезы из теории.\\
-Поставить большее количество экспериментов с различными алгоритмами.
 
     
 \end{frame}
 
 %----------------------------------------------------------------------------------------------------------
+
+%-----------------------------------------------------------------------------------------------------
+
+\begin{frame}{Публикации по теме}
+    \begin{itemize}
+    
+    \item $[1]$ A. S. Vepricov, A. S. Khritankov. On the problem of repeated supervised learning \url{https://github.com/intsystems/2023-Project-119/blob/master/paper/M1P.pdf}.
+
+    \item $[2]$ Anton Khritankov. Positive feedback loops lead to concept drift in machine learning systems.
+
+
+    \item $[3]$ Jiang, Ray & Chiappa, Silvia & Lattimore, Tor & György, András & Kohli, Pushmeet. (2019). Degenerate Feedback Loops in Recommender Systems
+  
+    \end{itemize}
+\end{frame}
+
 
 \end{document} 

@@ -37,6 +37,7 @@ def dynamic_system_iterate_oracle(model, usefulness, z, L, c_w_distribution, u_p
     item_info["ItemId"] = np.arange(w_size)
 
     points = []
+    L_values = []
 
     if visualize_distributions is not None:
         print_distributions(visualize_distributions[0], visualize_distributions[1], user_info, item_info,
@@ -56,6 +57,7 @@ def dynamic_system_iterate_oracle(model, usefulness, z, L, c_w_distribution, u_p
             feature = item_info.loc[item_info.ItemId == w.ItemId]["F"].item()
             u_true = w["Rating"].item()
             L_metric.append(0)
+            L_values.append(0)
             points.append((user_row["F"], feature))
             # print(user_row["F"].item(), u_true,  w["Rating"].item())
             real_deal = sps.bernoulli.rvs(u_true)  # моделируем сделки
@@ -64,12 +66,18 @@ def dynamic_system_iterate_oracle(model, usefulness, z, L, c_w_distribution, u_p
             predicted_cur_match.append(1 if predicted_deal == real_deal else 0)
 
             cur_diff_feadback.append(w["Rating"].item() - u_true)
+
+        for index_item, w in item_info.iterrows():
+            if not w["ItemId"].item() in w_offered["ItemId"].to_numpy():
+                points.append((user_row["F"].item(), w["F"].item()))
+                L_values.append(1)
+
         diff_feedback = np.hstack([diff_feedback, cur_diff_feadback])
         predicted_feedback.append(np.mean(predicted_cur_match))
 
 
 
-    c_w_distribution = DistributionHandler(construct_probability_density(points, np.array(L_metric)))
+    c_w_distribution = DistributionHandler(construct_probability_density(points, np.array(L_values)))
 
 
     hst = np.histogram(diff_feedback, density=True)
